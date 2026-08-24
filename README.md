@@ -14,7 +14,6 @@ A compra **não** fala com o Catálogo direto. O React chama o PHP. O PHP chama 
 
 [Abrir no Excalidraw](https://excalidraw.com/#json=ojOmlmuhs7Ehk73BnMhAW,WuXzVFgwFLqSmQqf9lYxqw)
 
-<iframe src="https://excalidraw.com/#json=ojOmlmuhs7Ehk73BnMhAW,WuXzVFgwFLqSmQqf9lYxqw" width="100%" height="640" style="border:0;" allow="fullscreen"></iframe>
 
 ---
 
