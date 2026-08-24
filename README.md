@@ -10,8 +10,6 @@ Venda simples de ingressos. Três serviços separados, como o desafio pediu:
 
 A compra **não** fala com o Catálogo direto. O React chama o PHP. O PHP chama o Python. Só grava venda se a reserva der certo.
 
-O desenho completo está em [`ingresso-certo.excalidraw`](ingresso-certo.excalidraw) (abre no [excalidraw.com](https://excalidraw.com/) arrastando o arquivo).
-
 ---
 
 ## Como rodar
