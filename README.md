@@ -182,33 +182,27 @@ Hoje isso é o desenho da demo. Em produção: Catálogo na rede interna, chave 
 
 ### Escalabilidade
 
-Milhares ao mesmo tempo: quem mais sofre é o Catálogo. O estoque é um número só.
+Quem mais sofre: o **Catálogo**. O estoque é um número só. Cada venda atualiza esse número. Não dá para ter duas verdades.
 
-Por quê: cada venda precisa atualizar esse número. Não dá para ter duas verdades. Vários PHP ao mesmo tempo todos batem no mesmo estoque.
+O PHP eu coloco mais de um, atrás de um **load balancer**.
 
-O PHP eu coloco mais de um, atrás de um balanceador. A página eu coloco em cache.
+O load balancer é o porteiro na frente de vários caixas. A pessoa chega num endereço só. Ele manda a compra para o PHP mais livre.
 
-Por quê: o caixa não guarda o estoque. Só recebe o pedido e chama o Catálogo. Mais PHP = mais gente no caixa. A lista de eventos muda pouco, então a página pode ir no cache. O estoque, não.
+```
+Pessoas → load balancer → PHP1 / PHP2 / PHP3 → Catálogo (estoque)
+```
 
-O que eu **não** coloco em cache é o estoque na hora de vender. Senão vendo ingresso que não existe.
+Mais PHP = mais caixas. O estoque continua um só. Se eu duplicar o Catálogo, vendo ingresso que não existe.
 
-Por quê: cache é cópia atrasada. A tela pode mostrar 5. No banco já é 0. Se eu vender com o número da tela, vendo o que não tem.
+A lista de eventos pode ir no cache. O estoque na hora de vender, não. Senão a tela mostra 5 e o banco já é 0.
 
-Quem chegar depois do último lugar ouve esgotou. Isso é certo.
-
-Por quê: o show tem 100 cadeiras, não 101. O `409` não é falha. É a regra.
+Quem chegar depois do último lugar toma `409`. O show tem 100 cadeiras, não 101.
 
 ### Extra
 
-Se uma função está lenta, eu não saio mudando no achismo. Primeiro eu meço onde trava.
+Se está lento, primeiro eu meço onde trava. Aí sim eu corrijo.
 
-Pode ser query, pode ser rede, pode ser lock.
-
-Aí sim eu corrijo.
-
-Se o travamento for o último ingresso, eu não tiro essa trava. Duas pessoas não podem ficar com o mesmo lugar.
-
-Por quê: Redis no escuro mascara o problema. Lock no último ingresso é regra, não bug.
+Trava no último ingresso eu não tiro. Duas pessoas não podem ficar com o mesmo lugar. Isso é regra, não bug.
 
 ---
 
