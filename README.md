@@ -214,6 +214,8 @@ Se não tiver isso, um manda texto, outro manda número, a API quebra.
 
 Neste projeto o React usa duas rotas: listar eventos e comprar. Reservar estoque é interno. O time de tela não mexe nisso.
 
+Por quê: contrato evita chute. `/reservar` interno reduz erro e furo de segurança.
+
 ---
 
 ### Segurança
@@ -226,17 +228,27 @@ Por isso o React não chama o Python. Ele chama o PHP, depois que a pessoa escol
 
 Cada um guarda o que é dele: tela no React, pedido no PHP, estoque no Python.
 
+Hoje isso é o desenho da demo. Em produção: Catálogo na rede interna, chave entre PHP e Python, HTTPS, CORS só do site, pagamento confirmado no gateway. O React nunca recebe essa chave.
+
 ---
 
 ### Escalabilidade
 
 Milhares ao mesmo tempo: quem mais sofre é o Catálogo. O estoque é um número só.
 
+Por quê: cada venda precisa atualizar esse número. Não dá para ter duas verdades. Vários PHP ao mesmo tempo todos batem no mesmo estoque.
+
 O PHP eu coloco mais de um, atrás de um balanceador. A página eu coloco em cache.
+
+Por quê: o caixa não guarda o estoque. Só recebe o pedido e chama o Catálogo. Mais PHP = mais gente no caixa. A lista de eventos muda pouco, então a página pode ir no cache. O estoque, não.
 
 O que eu **não** coloco em cache é o estoque na hora de vender. Senão vendo ingresso que não existe.
 
+Por quê: cache é cópia atrasada. A tela pode mostrar 5. No banco já é 0. Se eu vender com o número da tela, vendo o que não tem.
+
 Quem chegar depois do último lugar ouve esgotou. Isso é certo.
+
+Por quê: o show tem 100 cadeiras, não 101. O `409` não é falha. É a regra.
 
 ---
 
@@ -249,6 +261,8 @@ Pode ser query, pode ser rede, pode ser lock.
 Aí sim eu corrijo.
 
 Se o travamento for o último ingresso, eu não tiro essa trava. Duas pessoas não podem ficar com o mesmo lugar.
+
+Por quê: Redis no escuro mascara o problema. Lock no último ingresso é regra, não bug.
 
 ---
 
