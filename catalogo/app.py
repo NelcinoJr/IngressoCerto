@@ -1,8 +1,10 @@
-import sqlite3  # banco que ja vem no Python
-from flask import Flask, request, jsonify  # Flask vira API, request le, jsonify devolve JSON
+import sqlite3
+from pathlib import Path
+from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
-BANCO = "banco.db"  # arquivo deste servico. O PHP tem o dele.
+BANCO = "banco.db"
+DOCS = Path(__file__).resolve().parent.parent / "docs"
 
 
 def conectar():
@@ -49,6 +51,16 @@ def listar_eventos():  # so leitura, nao mexe no estoque
     linhas = banco.execute("SELECT id, nome, estoque, preco FROM eventos").fetchall()
     banco.close()
     return jsonify([dict(linha) for linha in linhas])
+
+
+@app.get("/docs")
+def swagger():
+    return send_from_directory(DOCS, "swagger.html")
+
+
+@app.get("/openapi.yaml")
+def contrato():
+    return send_from_directory(DOCS, "openapi.yaml")
 
 
 @app.post("/reservar")

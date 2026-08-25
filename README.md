@@ -48,6 +48,8 @@ npm run dev
 
 Abre [http://127.0.0.1:5173](http://127.0.0.1:5173).
 
+Documentação das APIs (Swagger): [http://127.0.0.1:5000/docs](http://127.0.0.1:5000/docs).
+
 O PHP desta máquina não tinha `pdo_sqlite`, então o pedido vai para `vendas/vendas.json`. O estoque continua no SQLite do Catálogo (`catalogo/banco.db`).
 
 ---
@@ -202,36 +204,86 @@ Erros:
 
 ## Perguntas do desafio
 
-### Documentação
+Cada resposta em três partes: o que eu faria, por quê, e a frase para falar.
 
-Documentaria a API de **Vendas** (e o GET de eventos) num contrato OpenAPI/Swagger: URL, método, campos, tipo, exemplo e código de erro. O frontend não adivinha se `evento_id` é número ou se `pagamento` é `pix` ou `PIX`.
+### 1. Documentação
 
-Na prática: “para comprar você manda isto; recebe aquilo; se acabou o estoque vem 409.” O time de tela **não** precisa da rota de reservar estoque.
+**Pergunta:** sendo backend, como o frontend sabe o que enviar?
 
-### Segurança
+**Resposta:** um contrato da API. URL, método, campos, tipo, exemplo e o que significa cada erro.
 
-Ninguém da internet deveria chamar o Python e baixar estoque sem pagar.
+**Por quê.** Se eu só falo “manda o evento”, um manda `"1"` em texto, outro manda `1` em número, outro manda `PIX` em maiúsculo. A API quebra e cada um culpa o outro.
 
-- O React **não** chama `/reservar`. Só o PHP chama, na rede interna.
-- Sem `pagamento` válido, a compra nem segue.
-- Catálogo não é público. PHP e Python se reconhecem (na demo está aberto; em produção: API key ou token de serviço).
-- Dados separados: estoque e preço no Catálogo; pedido, valor pago e forma no PHP. Cartão de verdade nem entra neste projeto (a demo só registra a escolha).
+**Neste projeto.** O frontend usa duas coisas:
 
-Frase: o frontend nunca baixa estoque; quem baixa é o serviço que também registra o pagamento.
+1. `GET /eventos` — lista `id`, `nome`, `estoque`, `preco`
+2. `POST` no PHP — manda `evento_id` (número), `quantidade` (número), `pagamento` (`pix`, `boleto` ou `cartao`)
 
-### Escalabilidade
+O `/reservar` do Python **não** entra nesse contrato. É chamada interna.
 
-Show enorme, milhares no mesmo segundo.
+**Como eu falo:**  
+“O contrato já está no Swagger em `/docs`. URL, campos, tipos, exemplo e erros 400, 409 e 503. O time de tela só usa GET de eventos e POST de compra. `/reservar` aparece marcado como interno.”
 
-Quem mais sofre: **Catálogo** — todo mundo disputa o mesmo número de estoque. Depois o **PHP** (cada clique vira pedido). A página do evento escala mais fácil (cache, CDN).
+---
 
-Sugestão: vários PHP atrás de um load balancer; Catálogo com o `UPDATE` atômico (não vender com cache de estoque); cache só para **ler** o show (nome, preço da vitrine); rate limit no botão. No último ingresso, parte das pessoas vai ouvir “esgotou”. O sistema está sendo honesto.
+### 2. Segurança
 
-### Extra (gargalo)
+**Pergunta:** como ninguém reserva estoque sem pagar? Como os dados ficam separados?
 
-Não otimizo no achismo. Meço: tempo da request, query lenta, lock, chamada HTTP.
+**Resposta:** quem baixa estoque é o PHP, depois que a pessoa escolheu pagar. O React não tem acesso à rota de reservar. Cada serviço guarda só o que é dele.
 
-Aí sim: índice, parar de N+1, cache de leitura, pool de conexão. Se o gargalo for o `UPDATE` do último ingresso, é esperado: duas pessoas não podem levar o mesmo lugar. A melhoria não é “tirar o lock”; é deixar a fila na **entrada** da página, não vender no escuro.
+**Por quê.** Se o `/reservar` ficar público, qualquer um baixa ingresso no Postman, sem PIX, sem boleto, sem cartão. O show some e a empresa não recebeu nada.
+
+**Neste projeto.**
+
+- A tela chama **só** o PHP, e só depois do alerta de pagamento.
+- Sem `pagamento` válido (`pix`, `boleto`, `cartao`), o PHP nem chama o Python.
+- O Catálogo fica interno. Em produção eu colocaria chave entre PHP e Python.
+- **Camadas:** Catálogo = estoque e preço. PHP = pedido, valor, forma. React = tela. Número de cartão de verdade não entra aqui; a demo só registra a escolha.
+
+**Como eu falo:**  
+“O frontend nunca baixa estoque. Quem baixa é o caixa, que também registra o pagamento. Estoque num banco, pedido no outro. Assim ninguém reserva ingresso no escuro.”
+
+---
+
+### 3. Escalabilidade
+
+**Pergunta:** milhares de pessoas no mesmo segundo. Quem sofre? O que eu faria?
+
+**Resposta:** o **Catálogo** sofre mais, porque todo mundo disputa o **mesmo** número de estoque. O PHP sofre em seguida, porque cada clique vira um pedido. A vitrine é a mais fácil de aguentar.
+
+**Por quê.** Posso ter 20 caixas (vários PHP). Não posso ter 20 verdades de estoque. O último ingresso é um ponto só.
+
+**O que eu faria.**
+
+- Vários PHP atrás de um load balancer (o caixa replica).
+- Catálogo continua com o `UPDATE` atômico. **Não** coloco estoque em cache na hora de vender. Cache serve para ler nome e preço na vitrine.
+- Limite de clique repetido no botão / no IP.
+- Aceitar que no último ingresso parte das pessoas vai ouvir “esgotou”. Isso não é falha; é o sistema honesto.
+
+**Como eu falo:**  
+“O gargalo natural é o estoque. Eu escalo o PHP fácil. No Catálogo eu protejo o número, não escondo ele num cache. Quem chegar depois do último lugar recebe 409.”
+
+---
+
+### 4. Extra — gargalo no backend
+
+**Pergunta:** uma função está lenta. Eu já tenho uma ideia. Como eu faria?
+
+**Resposta:** primeiro **meço**. Depois mudo. Sugestão sem dado é opinião.
+
+**Por quê.** O problema pode ser query, lock, chamada HTTP, loop, disco. Se eu “já coloco Redis” no escuro, posso mascarar o erro ou gastar tempo no lugar errado.
+
+**Como eu faria.**
+
+1. Olho o tempo: log, APM, `EXPLAIN` no SQL, profiler.
+2. Acho a causa: N+1, índice faltando, timeout no Python, lock no último ingresso.
+3. Só então: índice, cache de **leitura**, pool de conexão, menos ida e volta.
+
+Se o gargalo for o `UPDATE` do último ingresso, **não é bug**. Duas pessoas não podem levar o mesmo lugar. Aí a melhoria é fila na **entrada** (página do evento), não vender sem olhar o estoque.
+
+**Como eu falo:**  
+“Eu meço, acho a causa, aí aplico a melhoria. No último ingresso, lentidão de lock é o preço da consistência. Eu não tiro isso para ‘ficar mais rápido’ e superlotar o show.”
 
 ---
 

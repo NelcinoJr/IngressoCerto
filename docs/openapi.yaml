@@ -1,0 +1,210 @@
+openapi: 3.0.3
+info:
+  title: IngressoCerto
+  version: "1.0"
+  description: |
+    Contrato para o frontend.
+
+    - GET /eventos no Catálogo (Python, porta 5000)
+    - POST /index.php nas Vendas (PHP, porta 8000)
+
+    POST /reservar é interno. Só o PHP chama.
+servers:
+  - url: http://127.0.0.1:5000
+    description: Catálogo
+  - url: http://127.0.0.1:8000
+    description: Vendas
+tags:
+  - name: Frontend
+    description: O React usa estas rotas.
+  - name: Interno
+    description: PHP chama o Catálogo. O React não usa.
+paths:
+  /eventos:
+    servers:
+      - url: http://127.0.0.1:5000
+    get:
+      tags: [Frontend]
+      summary: Lista shows, estoque e preço
+      operationId: listarEventos
+      responses:
+        "200":
+          description: Lista de eventos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Evento"
+              example:
+                - id: 1
+                  nome: Show do Silva
+                  estoque: 50
+                  preco: 180
+  /index.php:
+    servers:
+      - url: http://127.0.0.1:8000
+    post:
+      tags: [Frontend]
+      summary: Compra um ingresso
+      description: Só depois do alerta de pagamento (PIX, boleto ou cartão).
+      operationId: comprar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompraPedido"
+            example:
+              evento_id: 1
+              quantidade: 1
+              pagamento: pix
+      responses:
+        "201":
+          description: Pedido gravado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompraOk"
+        "400":
+          description: Faltou campo ou pagamento inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Erro"
+              example:
+                erro: Escolha PIX, boleto ou cartão de crédito.
+        "409":
+          description: Sem estoque
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Erro"
+              example:
+                erro: Estoque insuficiente.
+        "503":
+          description: Catálogo fora. Não grava venda.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Erro"
+              example:
+                erro: Não foi possível concluir a compra agora. Tente novamente.
+  /reservar:
+    servers:
+      - url: http://127.0.0.1:5000
+    post:
+      tags: [Interno]
+      summary: Reserva estoque
+      description: Só o PHP chama. O React não usa esta rota.
+      operationId: reservar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evento_id, quantidade]
+              properties:
+                evento_id:
+                  type: integer
+                quantidade:
+                  type: integer
+                  minimum: 1
+            example:
+              evento_id: 1
+              quantidade: 1
+      responses:
+        "200":
+          description: Estoque baixado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservaOk"
+        "400":
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Erro"
+        "409":
+          description: Estoque insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Erro"
+components:
+  schemas:
+    Evento:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: Show do Silva
+        estoque:
+          type: integer
+          example: 50
+        preco:
+          type: number
+          example: 180
+    CompraPedido:
+      type: object
+      required: [evento_id, quantidade, pagamento]
+      properties:
+        evento_id:
+          type: integer
+          description: ID que veio do GET /eventos
+        quantidade:
+          type: integer
+          minimum: 1
+        pagamento:
+          type: string
+          enum: [pix, boleto, cartao]
+          description: minúsculo exatamente assim
+    CompraOk:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        venda_id:
+          type: integer
+          example: 19
+        evento_id:
+          type: integer
+        nome:
+          type: string
+        quantidade:
+          type: integer
+        preco:
+          type: number
+        total:
+          type: number
+        pagamento:
+          type: string
+        pagamento_nome:
+          type: string
+          example: PIX
+    ReservaOk:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        evento_id:
+          type: integer
+        nome:
+          type: string
+        quantidade:
+          type: integer
+        preco:
+          type: number
+        total:
+          type: number
+    Erro:
+      type: object
+      properties:
+        erro:
+          type: string
