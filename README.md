@@ -206,67 +206,49 @@ Erros:
 
 ### Documentação
 
-Sendo do time de backend, o frontend precisa de um contrato, não de um recado no Slack.
+O frontend precisa saber exatamente o que mandar. Por isso tem o Swagger em [http://127.0.0.1:5000/docs](http://127.0.0.1:5000/docs).
 
-Esse contrato está no Swagger: [http://127.0.0.1:5000/docs](http://127.0.0.1:5000/docs). Lá o time de tela vê a URL, o método, cada campo, o tipo, um exemplo e o que cada erro significa.
+Lá está: URL, campo, tipo, exemplo e erro.
 
-Sem isso, um manda `"1"` em texto, outro manda `1` em número, outro manda `PIX` em maiúsculo. A API quebra e cada um culpa o outro.
+Se não tiver isso, um manda texto, outro manda número, a API quebra.
 
-O React usa duas rotas:
-
-- `GET /eventos` — `id`, `nome`, `estoque`, `preco`
-- `POST` no PHP — `evento_id`, `quantidade`, `pagamento` (`pix`, `boleto` ou `cartao`)
-
-`400` faltou dado. `409` acabou o estoque. `503` o Catálogo está fora.
-
-`POST /reservar` no Python aparece no Swagger como **interno**. O frontend não chama essa rota.
+Neste projeto o React usa duas rotas: listar eventos e comprar. Reservar estoque é interno. O time de tela não mexe nisso.
 
 ---
 
 ### Segurança
 
-Reservar estoque sem pagamento não pode. Se `/reservar` ficar na internet, qualquer um baixa ingresso no Postman, o show some e a empresa não recebeu nada.
+Ninguém pode baixar estoque sem pagar.
 
-Por isso a tela nunca chama o Python para reservar. Ela chama só o PHP, e só depois do alerta de PIX, boleto ou cartão. Sem forma de pagamento válida, o PHP nem chega no Catálogo.
+Se a rota de reservar ficar pública, qualquer um tira ingresso no Postman e a empresa não recebe.
 
-Os dados ficam separados por camada:
+Por isso o React não chama o Python. Ele chama o PHP, depois que a pessoa escolhe PIX, boleto ou cartão.
 
-- React — o que a pessoa vê
-- PHP — pedido, valor, forma de pagamento
-- Python — estoque e preço
-
-Número de cartão de verdade não entra neste projeto. A demo só registra a escolha. Em produção, o Catálogo fica em rede interna e o PHP se identifica com uma chave de serviço.
-
-Quem baixa estoque é o caixa, que também registra o pagamento. Estoque num banco, pedido no outro.
+Cada um guarda o que é dele: tela no React, pedido no PHP, estoque no Python.
 
 ---
 
 ### Escalabilidade
 
-Se amanhã um evento tiver milhares de acessos no mesmo segundo, o serviço mais impactado é o **Catálogo**. Todo mundo disputa o mesmo número de estoque. O último ingresso é um ponto só. Posso ter vinte caixas; não posso ter vinte verdades de quantidade.
+Milhares ao mesmo tempo: quem mais sofre é o Catálogo. O estoque é um número só.
 
-O PHP é o segundo a sentir: cada clique vira um pedido. A vitrine (React) é a mais fácil de aguentar — cache e CDN na página do show.
+O PHP eu coloco mais de um, atrás de um balanceador. A página eu coloco em cache.
 
-O que eu faria:
+O que eu **não** coloco em cache é o estoque na hora de vender. Senão vendo ingresso que não existe.
 
-- vários PHP atrás de um load balancer
-- o `UPDATE` atômico continua no Catálogo; estoque na hora da venda **não** vai para cache
-- cache só para ler nome e preço na vitrine
-- limite de clique repetido
-
-Quem chegar depois do último lugar recebe `409`. Isso não é falha. É o sistema não superlotar o show.
+Quem chegar depois do último lugar ouve esgotou. Isso é certo.
 
 ---
 
 ### Extra
 
-Se uma função do backend parecer lenta e eu já tiver uma ideia, o primeiro passo não é aplicar a ideia. É medir.
+Se uma função está lenta, eu não saio mudando no achismo. Primeiro eu meço onde trava.
 
-O travamento pode ser query, índice, lock, chamada HTTP, loop. Colocar Redis no escuro pode mascarar o problema ou gastar tempo no lugar errado.
+Pode ser query, pode ser rede, pode ser lock.
 
-Eu olho o tempo (log, APM, `EXPLAIN`, profiler), acho a causa e só então mudo: índice, cache de leitura, pool, menos ida e volta.
+Aí sim eu corrijo.
 
-Se o gargalo for o `UPDATE` do último ingresso, isso não é bug. Duas pessoas não levam o mesmo lugar. Aí a melhoria é fila na entrada da página, não vender sem olhar o estoque. Eu não tiro essa trava só para “ficar mais rápido” e lotar o show além da cadeira.
+Se o travamento for o último ingresso, eu não tiro essa trava. Duas pessoas não podem ficar com o mesmo lugar.
 
 ---
 
