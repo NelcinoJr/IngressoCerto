@@ -204,86 +204,69 @@ Erros:
 
 ## Perguntas do desafio
 
-Cada resposta em três partes: o que eu faria, por quê, e a frase para falar.
+### Documentação
 
-### 1. Documentação
+Sendo do time de backend, o frontend precisa de um contrato, não de um recado no Slack.
 
-**Pergunta:** sendo backend, como o frontend sabe o que enviar?
+Esse contrato está no Swagger: [http://127.0.0.1:5000/docs](http://127.0.0.1:5000/docs). Lá o time de tela vê a URL, o método, cada campo, o tipo, um exemplo e o que cada erro significa.
 
-**Resposta:** um contrato da API. URL, método, campos, tipo, exemplo e o que significa cada erro.
+Sem isso, um manda `"1"` em texto, outro manda `1` em número, outro manda `PIX` em maiúsculo. A API quebra e cada um culpa o outro.
 
-**Por quê.** Se eu só falo “manda o evento”, um manda `"1"` em texto, outro manda `1` em número, outro manda `PIX` em maiúsculo. A API quebra e cada um culpa o outro.
+O React usa duas rotas:
 
-**Neste projeto.** O frontend usa duas coisas:
+- `GET /eventos` — `id`, `nome`, `estoque`, `preco`
+- `POST` no PHP — `evento_id`, `quantidade`, `pagamento` (`pix`, `boleto` ou `cartao`)
 
-1. `GET /eventos` — lista `id`, `nome`, `estoque`, `preco`
-2. `POST` no PHP — manda `evento_id` (número), `quantidade` (número), `pagamento` (`pix`, `boleto` ou `cartao`)
+`400` faltou dado. `409` acabou o estoque. `503` o Catálogo está fora.
 
-O `/reservar` do Python **não** entra nesse contrato. É chamada interna.
-
-**Como eu falo:**  
-“O contrato já está no Swagger em `/docs`. URL, campos, tipos, exemplo e erros 400, 409 e 503. O time de tela só usa GET de eventos e POST de compra. `/reservar` aparece marcado como interno.”
+`POST /reservar` no Python aparece no Swagger como **interno**. O frontend não chama essa rota.
 
 ---
 
-### 2. Segurança
+### Segurança
 
-**Pergunta:** como ninguém reserva estoque sem pagar? Como os dados ficam separados?
+Reservar estoque sem pagamento não pode. Se `/reservar` ficar na internet, qualquer um baixa ingresso no Postman, o show some e a empresa não recebeu nada.
 
-**Resposta:** quem baixa estoque é o PHP, depois que a pessoa escolheu pagar. O React não tem acesso à rota de reservar. Cada serviço guarda só o que é dele.
+Por isso a tela nunca chama o Python para reservar. Ela chama só o PHP, e só depois do alerta de PIX, boleto ou cartão. Sem forma de pagamento válida, o PHP nem chega no Catálogo.
 
-**Por quê.** Se o `/reservar` ficar público, qualquer um baixa ingresso no Postman, sem PIX, sem boleto, sem cartão. O show some e a empresa não recebeu nada.
+Os dados ficam separados por camada:
 
-**Neste projeto.**
+- React — o que a pessoa vê
+- PHP — pedido, valor, forma de pagamento
+- Python — estoque e preço
 
-- A tela chama **só** o PHP, e só depois do alerta de pagamento.
-- Sem `pagamento` válido (`pix`, `boleto`, `cartao`), o PHP nem chama o Python.
-- O Catálogo fica interno. Em produção eu colocaria chave entre PHP e Python.
-- **Camadas:** Catálogo = estoque e preço. PHP = pedido, valor, forma. React = tela. Número de cartão de verdade não entra aqui; a demo só registra a escolha.
+Número de cartão de verdade não entra neste projeto. A demo só registra a escolha. Em produção, o Catálogo fica em rede interna e o PHP se identifica com uma chave de serviço.
 
-**Como eu falo:**  
-“O frontend nunca baixa estoque. Quem baixa é o caixa, que também registra o pagamento. Estoque num banco, pedido no outro. Assim ninguém reserva ingresso no escuro.”
+Quem baixa estoque é o caixa, que também registra o pagamento. Estoque num banco, pedido no outro.
 
 ---
 
-### 3. Escalabilidade
+### Escalabilidade
 
-**Pergunta:** milhares de pessoas no mesmo segundo. Quem sofre? O que eu faria?
+Se amanhã um evento tiver milhares de acessos no mesmo segundo, o serviço mais impactado é o **Catálogo**. Todo mundo disputa o mesmo número de estoque. O último ingresso é um ponto só. Posso ter vinte caixas; não posso ter vinte verdades de quantidade.
 
-**Resposta:** o **Catálogo** sofre mais, porque todo mundo disputa o **mesmo** número de estoque. O PHP sofre em seguida, porque cada clique vira um pedido. A vitrine é a mais fácil de aguentar.
+O PHP é o segundo a sentir: cada clique vira um pedido. A vitrine (React) é a mais fácil de aguentar — cache e CDN na página do show.
 
-**Por quê.** Posso ter 20 caixas (vários PHP). Não posso ter 20 verdades de estoque. O último ingresso é um ponto só.
+O que eu faria:
 
-**O que eu faria.**
+- vários PHP atrás de um load balancer
+- o `UPDATE` atômico continua no Catálogo; estoque na hora da venda **não** vai para cache
+- cache só para ler nome e preço na vitrine
+- limite de clique repetido
 
-- Vários PHP atrás de um load balancer (o caixa replica).
-- Catálogo continua com o `UPDATE` atômico. **Não** coloco estoque em cache na hora de vender. Cache serve para ler nome e preço na vitrine.
-- Limite de clique repetido no botão / no IP.
-- Aceitar que no último ingresso parte das pessoas vai ouvir “esgotou”. Isso não é falha; é o sistema honesto.
-
-**Como eu falo:**  
-“O gargalo natural é o estoque. Eu escalo o PHP fácil. No Catálogo eu protejo o número, não escondo ele num cache. Quem chegar depois do último lugar recebe 409.”
+Quem chegar depois do último lugar recebe `409`. Isso não é falha. É o sistema não superlotar o show.
 
 ---
 
-### 4. Extra — gargalo no backend
+### Extra
 
-**Pergunta:** uma função está lenta. Eu já tenho uma ideia. Como eu faria?
+Se uma função do backend parecer lenta e eu já tiver uma ideia, o primeiro passo não é aplicar a ideia. É medir.
 
-**Resposta:** primeiro **meço**. Depois mudo. Sugestão sem dado é opinião.
+O travamento pode ser query, índice, lock, chamada HTTP, loop. Colocar Redis no escuro pode mascarar o problema ou gastar tempo no lugar errado.
 
-**Por quê.** O problema pode ser query, lock, chamada HTTP, loop, disco. Se eu “já coloco Redis” no escuro, posso mascarar o erro ou gastar tempo no lugar errado.
+Eu olho o tempo (log, APM, `EXPLAIN`, profiler), acho a causa e só então mudo: índice, cache de leitura, pool, menos ida e volta.
 
-**Como eu faria.**
-
-1. Olho o tempo: log, APM, `EXPLAIN` no SQL, profiler.
-2. Acho a causa: N+1, índice faltando, timeout no Python, lock no último ingresso.
-3. Só então: índice, cache de **leitura**, pool de conexão, menos ida e volta.
-
-Se o gargalo for o `UPDATE` do último ingresso, **não é bug**. Duas pessoas não podem levar o mesmo lugar. Aí a melhoria é fila na **entrada** (página do evento), não vender sem olhar o estoque.
-
-**Como eu falo:**  
-“Eu meço, acho a causa, aí aplico a melhoria. No último ingresso, lentidão de lock é o preço da consistência. Eu não tiro isso para ‘ficar mais rápido’ e superlotar o show.”
+Se o gargalo for o `UPDATE` do último ingresso, isso não é bug. Duas pessoas não levam o mesmo lugar. Aí a melhoria é fila na entrada da página, não vender sem olhar o estoque. Eu não tiro essa trava só para “ficar mais rápido” e lotar o show além da cadeira.
 
 ---
 
