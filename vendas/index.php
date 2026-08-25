@@ -21,7 +21,8 @@ $dados = json_decode(file_get_contents("php://input"), true) ?: []; // JSON que 
 $controller = new VendaController();
 $resultado = $controller->comprar(
     $dados["evento_id"] ?? null,
-    $dados["quantidade"] ?? null
+    $dados["quantidade"] ?? null,
+    $dados["pagamento"] ?? null
 );
 
 http_response_code($resultado["status"]); // 201, 400, 409 ou 503

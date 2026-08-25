@@ -18,18 +18,25 @@ def criar_tabela():
         CREATE TABLE IF NOT EXISTS eventos (
             id INTEGER PRIMARY KEY,
             nome TEXT NOT NULL,
-            estoque INTEGER NOT NULL
+            estoque INTEGER NOT NULL,
+            preco REAL NOT NULL DEFAULT 0
         )
         """
     )
+    colunas = [linha["name"] for linha in banco.execute("PRAGMA table_info(eventos)")]
+    if "preco" not in colunas:
+        banco.execute("ALTER TABLE eventos ADD COLUMN preco REAL NOT NULL DEFAULT 0")
+        banco.execute("UPDATE eventos SET preco = 180 WHERE id = 1")
+        banco.execute("UPDATE eventos SET preco = 90 WHERE id = 2")
+        banco.execute("UPDATE eventos SET preco = 45 WHERE id = 3")
     tem_evento = banco.execute("SELECT COUNT(*) AS total FROM eventos").fetchone()
     if tem_evento["total"] == 0:  # so insere exemplos se estiver vazio
         banco.executemany(
-            "INSERT INTO eventos (nome, estoque) VALUES (?, ?)",
+            "INSERT INTO eventos (nome, estoque, preco) VALUES (?, ?, ?)",
             [
-                ("Show do Silva", 50),
-                ("Festival de Inverno", 20),
-                ("Stand-up no Centro", 5),
+                ("Show do Silva", 50, 180),
+                ("Festival de Inverno", 20, 90),
+                ("Stand-up no Centro", 5, 45),
             ],
         )
     banco.commit()
@@ -39,7 +46,7 @@ def criar_tabela():
 @app.get("/eventos")
 def listar_eventos():  # so leitura, nao mexe no estoque
     banco = conectar()
-    linhas = banco.execute("SELECT id, nome, estoque FROM eventos").fetchall()
+    linhas = banco.execute("SELECT id, nome, estoque, preco FROM eventos").fetchall()
     banco.close()
     return jsonify([dict(linha) for linha in linhas])
 
@@ -62,13 +69,29 @@ def reservar():  # baixa estoque. Nao grava pedido: pedido e no PHP
         """,
         (quantidade, evento_id, quantidade),
     )  # uma query so: evita vender alem do estoque
+    if alterou.rowcount == 0:
+        banco.close()
+        return jsonify({"erro": "Estoque insuficiente."}), 409
+
+    evento = banco.execute(
+        "SELECT nome, preco FROM eventos WHERE id = ?",
+        (evento_id,),
+    ).fetchone()
     banco.commit()
     banco.close()
 
-    if alterou.rowcount == 0:  # nenhuma linha mudou = nao tinha ingresso
-        return jsonify({"erro": "Estoque insuficiente."}), 409
-
-    return jsonify({"ok": True, "evento_id": evento_id, "quantidade": quantidade})
+    preco = float(evento["preco"] or 0)
+    total = round(preco * int(quantidade), 2)
+    return jsonify(
+        {
+            "ok": True,
+            "evento_id": evento_id,
+            "nome": evento["nome"],
+            "quantidade": quantidade,
+            "preco": preco,
+            "total": total,
+        }
+    )
 
 
 @app.after_request

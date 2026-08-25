@@ -79,9 +79,10 @@ flowchart LR
   Catalogo --> Estoque[(banco.db)]
 ```
 
-- `GET /eventos` só lista. Não mexe em estoque.
+- `GET /eventos` lista show, estoque e **preço**. Só leitura.
 - `POST /reservar` baixa ingresso com um `UPDATE ... WHERE estoque >= 1`. Dois cliques no último lugar: um passa, o outro toma 409.
 - O React nunca chama `/reservar`.
+- A compra só segue depois do alerta de pagamento: PIX, boleto ou cartão.
 
 ---
 
@@ -89,12 +90,12 @@ flowchart LR
 
 Tudo **síncrono** (HTTP e espera). A pessoa está na tela e precisa saber se o lugar é dela. Fila eu deixaria para e-mail ou nota, não para confirmar ingresso.
 
-1. Clica em Comprar.
-2. React manda `POST` para o PHP (`evento_id`, `quantidade: 1`) e mostra carregando.
+1. Clica em Comprar. Abre o alerta de pagamento (PIX, boleto ou cartão).
+2. Confirma **Pagar agora**. O React manda `POST` para o PHP (`evento_id`, `quantidade`, `pagamento`).
 3. PHP chama `POST /reservar` no Python e espera.
-4. Python tenta baixar o estoque na mesma query.
-5. Se deu 200, o PHP grava o pedido e responde 201. Se deu 409, não grava.
-6. React tira o carregando e mostra sucesso ou erro. O número na tela desce.
+4. Python tenta baixar o estoque na mesma query e devolve nome, preço e total.
+5. Se deu 200, o PHP grava o pedido com o valor e a forma de pagamento. Se deu 409, não grava.
+6. React mostra o alerta verde com o valor real e o número do pedido. O estoque na tela desce.
 
 ```mermaid
 sequenceDiagram

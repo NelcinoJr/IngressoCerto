@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import BotaoComprar from "./BotaoComprar.jsx";
+import BotaoComprar, { reais } from "./BotaoComprar.jsx";
 
 const artes = [
   {
@@ -20,13 +20,14 @@ const artes = [
 ];
 
 function App() {
-  const [eventos, setEventos] = useState([]); // lista que veio do Catálogo
+  const [eventos, setEventos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [alerta, setAlerta] = useState(null);
 
   async function carregarEventos() {
     try {
-      const resposta = await fetch("http://127.0.0.1:5000/eventos"); // GET no Python, so lista
+      const resposta = await fetch("http://127.0.0.1:5000/eventos");
       const dados = await resposta.json();
       setEventos(dados);
       setErro("");
@@ -41,7 +42,15 @@ function App() {
     carregarEventos();
   }, []);
 
-  function baixarEstoque(eventoId) { // a tela acompanha o estoque sem recarregar
+  useEffect(() => {
+    if (!alerta) {
+      return;
+    }
+    const t = setTimeout(() => setAlerta(null), 5000);
+    return () => clearTimeout(t);
+  }, [alerta]);
+
+  function aoComprar(eventoId, dados) {
     setEventos((lista) =>
       lista.map((evento) =>
         evento.id === eventoId
@@ -49,6 +58,10 @@ function App() {
           : evento
       )
     );
+    setAlerta({
+      titulo: "Pagamento confirmado",
+      texto: `${dados.nome || "Ingresso"} · ${reais(dados.total)} · ${dados.pagamento_nome || ""} · pedido #${dados.venda_id}`,
+    });
   }
 
   return (
@@ -57,6 +70,20 @@ function App() {
       style={{ fontFamily: "Outfit, sans-serif" }}
     >
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(251,191,36,0.12),_transparent_55%)]" />
+
+      {alerta && (
+        <div className="fixed right-6 top-6 z-50 w-[min(100%-3rem,24rem)] rounded-2xl border border-emerald-400/30 bg-emerald-950/95 p-4 shadow-xl shadow-black/40">
+          <p className="text-sm font-semibold text-emerald-300">{alerta.titulo}</p>
+          <p className="mt-1 text-sm text-white/80">{alerta.texto}</p>
+          <button
+            type="button"
+            onClick={() => setAlerta(null)}
+            className="mt-3 text-xs text-white/50 hover:text-white"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
 
       <main className="relative mx-auto max-w-5xl px-6 py-16">
         <p className="text-sm font-medium tracking-widest text-amber-400 uppercase">
@@ -67,8 +94,8 @@ function App() {
           <span className="block text-white/55">Garanta seu lugar.</span>
         </h1>
         <p className="mt-4 max-w-lg text-white/55">
-          O estoque é do Catálogo. A compra passa pelo caixa. Cada ingresso
-          vendido some da lista na hora.
+          Cada evento tem seu preço. A compra passa pelo caixa e o alerta
+          confirma o valor pago.
         </p>
 
         {carregando && (
@@ -93,6 +120,9 @@ function App() {
                   <p className="text-xs text-white/45">{arte.quando}</p>
                   <h2 className="mt-2 text-xl font-semibold">{evento.nome}</h2>
                   <p className="mt-1 text-sm text-white/50">{arte.lugar}</p>
+                  <p className="mt-3 text-2xl font-semibold text-amber-300">
+                    {reais(evento.preco)}
+                  </p>
 
                   <div className="mt-4 flex items-center justify-between">
                     <span
@@ -113,8 +143,10 @@ function App() {
 
                   <BotaoComprar
                     eventoId={evento.id}
+                    nome={evento.nome}
+                    preco={evento.preco}
                     esgotado={esgotado}
-                    onComprou={() => baixarEstoque(evento.id)}
+                    onComprou={(dados) => aoComprar(evento.id, dados)}
                   />
                 </div>
               </article>
